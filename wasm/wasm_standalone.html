@@ -1,0 +1,54 @@
+<html>
+  <head>
+    <script>
+      let wasm_instance;
+      function wasmify() {
+        wasm_base64 =
+          "AGFzbQEAAAABEwRgAABgAX8Bf2ABfwBgAn9/AX8DBgUAAQIDAwUEAQCgBgYxCH8BQZCIBAt/AEGQiAQLfwBBgAgLfwBBgAgLfwBBhAgLfwBBgAgLfwBBAAt/AEEBCweiAQ0GbWVtb3J5AgARX193YXNtX2NhbGxfY3RvcnMAAAZtYWxsb2MAAQRmcmVlAAIDc3VtAAMDYWRkAAQLX19oZWFwX2Jhc2UDAQxidW1wX3BvaW50ZXIDAgxfX2Rzb19oYW5kbGUDAwpfX2RhdGFfZW5kAwQNX19nbG9iYWxfYmFzZQMFDV9fbWVtb3J5X2Jhc2UDBgxfX3RhYmxlX2Jhc2UDBwrLAwUCAAsdAQF/QQBBACgCgIiAgAAiASAAajYCgIiAgAAgAQsCAAusAQEEfwJAIAFBAU4NAEEADwsgAUEDcSECAkACQCABQX9qQQNPDQBBACEDQQAhBAwBC0EAIQQgACEFIAFBfHEiAyEBA0AgBUEMaigCACAFQQhqKAIAIAVBBGooAgAgBSgCACAEampqaiEEIAVBEGohBSABQXxqIgENAAsLAkAgAkUNACAAIANBAnRqIQUDQCAFKAIAIARqIQQgBUEEaiEFIAJBf2oiAg0ACwsgBAv2AQEGf0EAIQJBAEEAKAKAiICAACIDIAFBAnRqNgKAiICAAAJAIAFBAUgNACABQQNxIQQCQCABQX9qQQNJDQAgAUF8cSEFQQAhAUEAIQIDQCADIAFqIgYgACABaiIHKAIAQQpqNgIAIAZBBGogB0EEaigCAEEKajYCACAGQQhqIAdBCGooAgBBCmo2AgAgBkEMaiAHQQxqKAIAQQpqNgIAIAFBEGohASAFIAJBBGoiAkcNAAsLIARFDQAgACACQQJ0IgZqIQEgAyAGaiEGA0AgBiABKAIAQQpqNgIAIAFBBGohASAGQQRqIQYgBEF/aiIEDQALCyADCwsLAQBBgAgLBBAEAQAAUQRuYW1lASwFABFfX3dhc21fY2FsbF9jdG9ycwEGbWFsbG9jAgRmcmVlAwNzdW0EA2FkZAcSAQAPX19zdGFja19wb2ludGVyCQgBAAUuZGF0YQA4CXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQxVYnVudHUgY2xhbmcRMTQuMC4wLTF1YnVudHUxLjE=";
+        wasm_buffer = Uint8Array.from(atob(wasm_base64), (c) =>
+          c.charCodeAt(0)
+        ).buffer;
+        WebAssembly.compile(wasm_buffer).then((x) => {
+          wasm = x;
+          wasm_instance = new WebAssembly.Instance(wasm);
+        });
+      }
+
+      function hw() {
+        const jsArray = [];
+
+        for (let i = 0; i < 1000000; i++) {
+          jsArray.push(i + 10);
+        }
+
+        const cArrayPointer = wasm_instance.exports.malloc(jsArray.length * 4);
+        const cArray = new Uint32Array(
+          wasm_instance.exports.memory.buffer,
+          cArrayPointer,
+          jsArray.length
+        );
+        // copy the values from jsArray to the cArray (the set method)
+        cArray.set(jsArray);
+        const new_p = wasm_instance.exports.add(cArrayPointer, cArray.length)
+        let c_new_array = new Uint32Array(
+          wasm_instance.exports.memory.buffer,
+          new_p,
+          jsArray.length
+        );
+        c_new_array = Array.from(c_new_array);
+        console.log(c_new_array);
+      }
+
+      document.addEventListener("DOMContentLoaded", () => {
+        wasmify();
+        document.getElementById("knapp").addEventListener("click", () => {
+          hw();
+        });
+      });
+    </script>
+  </head>
+
+  <body>
+    <button id="knapp">WASM</button>
+  </body>
+</html>
