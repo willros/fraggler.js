@@ -1,4 +1,3 @@
-
 const LIZ = [20, 40, 60, 80, 100, 114, 120, 140, 160, 180, 200, 214, 220, 240, 260, 280, 300, 314, 320, 340, 360, 380, 400, 414, 420, 440, 460, 480, 500, 514, 520, 540, 560, 580, 600];
 
 // https://github.com/eamitchell/ab1ToJSON
@@ -95,76 +94,78 @@ findPeaks = (data, threshold, windowSize) => {
     return peaks;
 }
 
-function minMaxScaler(data) {
-    let min = Math.min(...data) 
-    let factor = Math.max(...data) - min;
-    scaled = []
-    for (let i = 0; i < data.length; i++) {
-        scaled.push((data[i] - min) / factor)
+
+
+// Ladder matching functions
+function* range(start, end) {
+    for (; start <= end; ++start) { yield start; }
+}
+function last(arr) { return arr[arr.length - 1]; }
+function* numericCombinations(n, r, loc = []) {
+    const idx = loc.length;
+    if (idx === r) {
+        yield loc;
+        return;
     }
+    for (let next of range(idx ? last(loc) + 1 : 0, n - r + idx)) { yield* numericCombinations(n, r, loc.concat(next)); }
+}
+function* combinations(arr, r) {
+    for (let idxs of numericCombinations(arr.length, r)) { yield idxs.map(i => arr[i]); }
 }
 
-function matchRetentionTimes(reference, target) {
-    const dp = [];
-    function scoringFunction(refSize, targetTime) {
-        const absoluteDiff = Math.abs(refSize - targetTime);
-        const relativeDiff = Math.abs(refSize - targetTime) / refSize;
-
-        // Define your scoring rules here
-        // Example: Higher score for closer matches, considering both absolute and relative differences
-        if (absoluteDiff <= 2 && relativeDiff <= 0.1) {
-            return 10;
-        } else if (absoluteDiff <= 5 && relativeDiff <= 0.2) {
-            return 5;
-        } else {
-            return 0;
+function diffs(array, max_diff) {
+    for (let i = 0; i < array.length - 1; i++) {
+        if (array[i + 1] - array[i] > max_diff) {
+            return true;
         }
     }
-
-    // Initialize dp matrix
-    for (let i = 0; i <= reference.length; i++) {
-        dp[i] = [];
-        for (let j = 0; j <= target.length; j++) {
-            dp[i][j] = 0;
-        }
-    }
-
-    // Fill dp matrix
-    for (let i = 1; i <= reference.length; i++) {
-        for (let j = 1; j <= target.length; j++) {
-            const matchScore = scoringFunction(reference[i - 1], target[j - 1]);
-
-            const diagonalScore = dp[i - 1][j - 1] + matchScore;
-            const upperScore = dp[i - 1][j];
-            const leftScore = dp[i][j - 1];
-
-            dp[i][j] = Math.max(diagonalScore, upperScore, leftScore);
-        }
-    }
-
-    // Traceback
-    const matchedPeaks = [];
-    let i = reference.length;
-    let j = target.length;
-    while (i > 0 && j > 0) {
-        const matchScore = scoringFunction(reference[i - 1], target[j - 1]);
-
-        if (dp[i][j] === dp[i - 1][j - 1] + matchScore) {
-            matchedPeaks.push(target[j - 1]);
-            i--;
-            j--;
-        } else if (dp[i][j] === dp[i - 1][j]) {
-            // Gap in reference
-            i--;
-        } else {
-            // Gap in target
-            j--;
-        }
-    }
-    matchedPeaks.reverse();
-    return matchedPeaks;
+    return false;
 }
 
+// implement pearsonr corr function
+function pearson (x, y) {
+    const promedio = l => l.reduce((s, a) => s + a, 0) / l.length
+    const calc = (v, prom) => Math.sqrt(v.reduce((s, a) => (s + a * a), 0) - n * prom * prom)
+    let n = x.length
+    let nn = 0
+    for (let i = 0; i < n; i++, nn++) {
+        if ((!x[i] && x[i] !== 0) || (!y[i] && y[i] !== 0)) {
+            nn--
+            continue
+        }
+        x[nn] = x[i]
+        y[nn] = y[i]
+    }
+    if (n !== nn) {
+        x = x.splice(0, nn)
+        y = y.splice(0, nn)
+        n = nn
+    }
+    const prom_x = promedio(x), prom_y = promedio(y)
+    return (x
+        .map((e, i) => ({ x: e, y: y[i] }))
+        .reduce((v, a) => v + a.x * a.y, 0) - n * prom_x * prom_y
+    ) / (calc(x, prom_x) * calc(y, prom_y))
+}
+
+function findBestMatch(peaks, ladder) {
+    let highScoreMatch;
+    let pearsonScore = 0;
+    for (comb of combinations(peaksIndices, LIZ.length)) {
+        if (diffs(comb, 200)) { 
+            continue; 
+        }
+        let score = pearson(comb, LIZ);
+        if (score > pearsonScore) {
+            pearsonScore = score;
+            highScoreMatch = comb;
+        }
+    }
+    return highScoreMatch;
+}
+
+
+// Fit basepairs to best model
 function polynomialFit(x, y, degree) {
     if (x.length !== y.length) {
         throw new Error("Input arrays x and y must have the same length.");
@@ -310,9 +311,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 let peaks = findPeaks(ladder, threshold=500, windowSize=10);
                 peaksIndices = peaks.map(x => x[0]);
                 console.log(peaksIndices);
-                const matchedPeaks = matchRetentionTimes(LIZ, peaksIndices);
 
-                //coefs = polynomialFit(matchedPeaks, LIZ, 1);
+                // Trying to fit the ladder to the peaks
+
+                let bestMatch = findBestMatch(peaksIndices, LIZ);
+                console.log(bestMatch);
+            
+
 
                 // ladder 205
                 plotData(converter, "DATA205", "data1");
