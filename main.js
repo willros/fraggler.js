@@ -1,4 +1,11 @@
 const LIZ = [20, 40, 60, 80, 100, 114, 120, 140, 160, 180, 200, 214, 220, 240, 260, 280, 300, 314, 320, 340, 360, 380, 400, 414, 420, 440, 460, 480, 500, 514, 520, 540, 560, 580, 600];
+const tagDict = {
+    "DATA1": { "tagName": "DATA", "tagNum": 1, "typeToReturn": "getShort" },
+    "DATA2": { "tagName": "DATA", "tagNum": 2, "typeToReturn": "getShort" },
+    "DATA3": { "tagName": "DATA", "tagNum": 3, "typeToReturn": "getShort" },
+    "DATA4": { "tagName": "DATA", "tagNum": 4, "typeToReturn": "getShort" },
+    "DATA205": { "tagName": "DATA", "tagNum": 205, "typeToReturn": "getShort" },
+};
 
 // https://github.com/eamitchell/ab1ToJSON
 let DIR_SIZE = 28;
@@ -151,7 +158,7 @@ function pearson (x, y) {
 function findBestMatch(peaks, ladder) {
     let highScoreMatch;
     let pearsonScore = 0;
-    for (comb of combinations(peaksIndices, LIZ.length)) {
+    for (comb of combinations(peaks, LIZ.length)) {
         if (diffs(comb, 200)) { 
             continue; 
         }
@@ -264,14 +271,6 @@ function predict(coefficients, x) {
 
 
 
-const tagDict = {
-    "DATA1": { "tagName": "DATA", "tagNum": 1, "typeToReturn": "getShort" },
-    "DATA2": { "tagName": "DATA", "tagNum": 2, "typeToReturn": "getShort" },
-    "DATA3": { "tagName": "DATA", "tagNum": 3, "typeToReturn": "getShort" },
-    "DATA4": { "tagName": "DATA", "tagNum": 4, "typeToReturn": "getShort" },
-    "DATA205": { "tagName": "DATA", "tagNum": 205, "typeToReturn": "getShort" },
-};
-
 function plotData(converter, tag, divName) {
     let data = converter.getData(tagDict[tag]);
     const s = new dfd.Series(data);
@@ -298,7 +297,45 @@ function plotAllData(converter, coefs) {
     df.plot("allData").line()
 }
 
-//let coefs;
+function calculateCombinations(n, k) {
+    if (n < 0 || k < 0 || k > n) {
+      return 0; // Invalid input
+    }
+    
+    let numerator = 1;
+    let denominator = 1;
+    
+    for (let i = 1; i <= k; i++) {
+      numerator *= (n - i + 1);
+      denominator *= i;
+    }
+    
+    return Math.floor(numerator / denominator);
+  }
+  
+
+function findAndMatchLadder(converter, threshold, windowSize=10) {
+    let ladder = converter.getData(tagDict["DATA205"]);
+    let peaks = findPeaks(ladder, threshold=threshold, windowSize=windowSize);
+    let peaksIndices = peaks.map(x => x[0]);
+    if (peaksIndices.length < LIZ.length) {
+        alert(`Too few peaks found!, Number of peaks: ${peaksIndices.length}`);
+        return;
+    }
+    let numCombinations = calculateCombinations(peaksIndices.length, LIZ.length);
+    if (numCombinations >= 200000) {
+        alert(`Too many combinations!, Number of combs: ${numCombinations}`);
+        return;
+    } 
+
+    let bestMatch = findBestMatch(peaksIndices, LIZ);
+    return bestMatch
+        
+}
+
+
+
+let coefs;
 document.addEventListener("DOMContentLoaded", function () {
     let fileInput = document.querySelector('#fsa-file');
     fileInput.addEventListener('change', (event) => {
@@ -307,16 +344,9 @@ document.addEventListener("DOMContentLoaded", function () {
             .then((buffer) => {
                 const dataView = new DataView(buffer);
                 let converter = new abiConverter(dataView);
-                let ladder = converter.getData(tagDict["DATA205"]);
-                let peaks = findPeaks(ladder, threshold=500, windowSize=10);
-                peaksIndices = peaks.map(x => x[0]);
-                console.log(peaksIndices);
-
-                // Trying to fit the ladder to the peaks
-
-                let bestMatch = findBestMatch(peaksIndices, LIZ);
-                console.log(bestMatch);
-            
+                let threshold = document.querySelector("#peakThreshold").value
+                const bestMatch = findAndMatchLadder(converter, threshold=threshold);
+                coefs = polynomialFit(bestMatch, LIZ, 5);
 
 
                 // ladder 205
@@ -324,7 +354,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 plotData(converter, "DATA2", "data2");
                 plotData(converter, "DATA3", "data3");
                 plotData(converter, "DATA1", "data4");
-                //plotAllData(converter, coefs);
+                plotAllData(converter, coefs);
             })
             .catch((error) => {
                 console.error('An error occurred while parsing the file:', error);
